@@ -12,12 +12,16 @@
 #include <unistd.h>
 #include "oss.h"
 #include "lib/myclock.h"
+#include "lib/pagetable.c"
 #include "lib/sem.h"
 #include "lib/shm.h"
 
 // Shared Memory Globals
 static int clock_id;
 static struct my_clock* clock_shm;
+
+static int page_table_id;
+static struct page* page_table;
 
 static int sem_id;  // For protecting the clock
 
@@ -29,6 +33,9 @@ int main(int argc, char* argv[]) {
   clock_id = get_clock_shm();
   clock_shm = attach_to_clock_shm(clock_id);
   clock_shm->secs = 1;
+
+  page_table_id = get_page_table();
+  page_table = attach_to_page_table(page_table_id);
 
   sem_id = allocate_sem(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
   init_sem(sem_id, 1);
@@ -83,6 +90,9 @@ static void free_shm_and_abort(int signum) {
 static void free_shm() {
   detach_from_clock_shm(clock_shm);
   shmctl(clock_id, IPC_RMID, 0);
+
+  detach_from_page_table(page_table);
+  shmctl(page_table_id, IPC_RMID, 0);
 
   deallocate_sem(sem_id);
 }
