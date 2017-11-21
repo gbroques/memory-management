@@ -4,11 +4,14 @@
  * Copyright (c) 2017 G Brenden Roques
  */
 
+#include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include "oss.h"
 #include "lib/myclock.h"
@@ -23,9 +26,15 @@ static struct my_clock* clock_shm;
 static int page_table_id;
 static struct page* page_table;
 
-static int sem_id;  // For protecting the clock
+// For proteting the clock
+static int clock_sem_id;
+
+// For making memory references
+static int mem_sem_ids[MAX_PROCS];
 
 int main(int argc, char* argv[]) {
+  srand(time(0));
+
   parse_command_options(argc, argv);
 
   setup_interrupt();
@@ -37,8 +46,14 @@ int main(int argc, char* argv[]) {
   page_table_id = get_page_table();
   page_table = attach_to_page_table(page_table_id);
 
-  sem_id = allocate_sem(IPC_PRIVATE, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-  init_sem(sem_id, 1);
+  setup_clock_sem();
+
+  setup_mem_sems();
+
+  pid_t children[MAX_PROCS];
+  fork_and_exec_children(children);
+
+  wait_for_all_children();
 
   free_shm();
 
@@ -94,7 +109,9 @@ static void free_shm() {
   detach_from_page_table(page_table);
   shmctl(page_table_id, IPC_RMID, 0);
 
-  deallocate_sem(sem_id);
+  deallocate_sem(clock_sem_id);
+
+  deallocate_mem_sems();
 }
 
 /**
@@ -110,4 +127,106 @@ static int setup_interrupt() {
     return EXIT_FAILURE;
   }
   return success;
+}
+
+static void fork_and_exec_children(pid_t* children) {
+  int i = 0;
+  for (; i < MAX_PROCS; i++) {
+    fork_and_exec_child(children, i);
+  }
+}
+
+/**
+ * Forks and execs a child process.
+ * 
+ * @param index Index of children PID array
+ */
+static void fork_and_exec_child(pid_t* children, int index) {
+  children[index] = fork();
+
+  if (children[index] == -1) {
+    perror("Failed to fork");
+    exit(EXIT_FAILURE);
+  }
+
+  if (children[index] == 0) {  // Child
+    char pid_str[12];
+    snprintf(pid_str,
+             sizeof(pid_str),
+             "%d",
+             index);
+
+    char clock_id_str[12];
+    snprintf(clock_id_str,
+             sizeof(clock_id_str),
+             "%d",
+             clock_id);
+
+    char clock_sem_id_str[12];
+    snprintf(clock_sem_id_str,
+             sizeof(clock_sem_id_str),
+             "%d",
+             clock_sem_id);
+
+    char mem_sem_id_str[12];
+    snprintf(mem_sem_id_str,
+             sizeof(mem_sem_id_str),
+             "%d",
+             mem_sem_ids[index]);
+
+    execlp("user",
+           "user",
+           pid_str,
+           clock_id_str,
+           clock_sem_id_str,
+           mem_sem_id_str,
+           (char*) NULL);
+    perror("Failed to exec");
+    _exit(EXIT_FAILURE);
+  }
+}
+
+/**
+ * Allocates semaphores for
+ * making memory references with
+ * an initial value of 1.
+ */
+static void setup_mem_sems() {
+  int i = 0;
+  for (; i < MAX_PROCS; i++) {
+    int sem_flags = IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR;
+    mem_sem_ids[i] = allocate_sem(IPC_PRIVATE, sem_flags);
+    init_sem(mem_sem_ids[i], 1);
+  }
+}
+
+/**
+ * Deallocate semaphores for
+ * making memory references.
+ */
+static void deallocate_mem_sems() {
+  int i = 0;
+  for (; i < MAX_PROCS; i++) {
+    deallocate_sem(mem_sem_ids[i]);
+  }
+}
+
+/**
+ * Allocates a semaphore for protecting
+ * the logical clock with an initial
+ * value of 1.
+ */
+static void setup_clock_sem() {
+  int sem_flags = IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR;
+  clock_sem_id = allocate_sem(IPC_PRIVATE, sem_flags);
+  init_sem(clock_sem_id, 1);
+}
+
+static void wait_for_all_children() {
+  pid_t pid;
+  while ((pid = waitpid(-1, NULL, 0))) {
+    if (errno == ECHILD) {
+      break;
+    }
+  }
 }
