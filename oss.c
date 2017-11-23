@@ -23,8 +23,8 @@
 static int clock_id;
 static struct my_clock* clock_shm;
 
-static int page_table_id;
-static struct page* page_table;
+static int page_tables_id;
+static struct page** page_tables;
 
 // For proteting the clock
 static int clock_sem_id;
@@ -43,8 +43,8 @@ int main(int argc, char* argv[]) {
   clock_shm = attach_to_clock_shm(clock_id);
   clock_shm->secs = 1;
 
-  page_table_id = get_page_table();
-  page_table = attach_to_page_table(page_table_id);
+  page_tables_id = get_page_tables(MAX_PROCS);
+  page_tables = attach_to_page_tables(page_tables_id);
 
   setup_clock_sem();
 
@@ -106,8 +106,8 @@ static void free_shm() {
   detach_from_clock_shm(clock_shm);
   shmctl(clock_id, IPC_RMID, 0);
 
-  detach_from_page_table(page_table);
-  shmctl(page_table_id, IPC_RMID, 0);
+  detach_from_page_tables(page_tables);
+  shmctl(page_tables_id, IPC_RMID, 0);
 
   deallocate_sem(clock_sem_id);
 
