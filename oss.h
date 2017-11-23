@@ -1,7 +1,7 @@
 #ifndef OSS_H
 #define OSS_H
 
-#define MAX_PROCS 18
+#define MAX_PROCS 12
 
 static void parse_command_options(int argc, char* argv[]);
 static void print_help_message(char* executable_name);
