@@ -1,5 +1,5 @@
-#ifndef SEM_H
-#define SEM_H
+#ifndef SEM_H_
+#define SEM_H_
 
 #include <sys/sem.h>
 

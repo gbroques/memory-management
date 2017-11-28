@@ -1,5 +1,5 @@
-#ifndef MYCLOCK_H
-#define MYCLOCK_H
+#ifndef MYCLOCK_H_
+#define MYCLOCK_H_
 
 // 1 * 10^9 nanoseconds
 #define NANOSECS_PER_SEC 1000000000
@@ -10,11 +10,12 @@
 /*--------------------------*
  | A simple simulated clock |
  *--------------------------*/
-struct my_clock {
+typedef struct my_clock {
   unsigned int secs;      // Amount of time in seconds
   unsigned int nanosecs;  // Amount of time in nanoseconds
-};
+} my_clock;
 
-void round_clock(struct my_clock* myclock);
+int round_clock(my_clock* myclock);
+int update_clock(my_clock* myclock, unsigned int nanosecs);
 
 #endif

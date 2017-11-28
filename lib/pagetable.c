@@ -9,8 +9,8 @@
  * 
  * @return The shared memory segment ID
  */
-int get_page_tables(unsigned int num_page_tables) {
-  size_t size = sizeof(struct page) * PAGE_TABLE_SIZE * num_page_tables;
+int get_page_tables() {
+  size_t size = sizeof(page) * TOTAL_PAGES;
   int id = shmget(IPC_PRIVATE, size,
     IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 
@@ -26,7 +26,7 @@ int get_page_tables(unsigned int num_page_tables) {
  * 
  * @return A pointer to page tables in shared memory.
  */
-struct page** attach_to_page_tables(int id) {
+page* attach_to_page_tables(int id) {
   void* page_tables = shmat(id, NULL, 0);
 
   if (*((int*) page_tables) == -1) {
@@ -34,7 +34,7 @@ struct page** attach_to_page_tables(int id) {
     exit(EXIT_FAILURE);
   }
 
-  return (struct page**) page_tables;
+  return (page*) page_tables;
 }
 
 /**
@@ -43,10 +43,32 @@ struct page** attach_to_page_tables(int id) {
  * @param A pointer to page tables in shared memory
  * @return On success, 0. On error -1.
  */
-int detach_from_page_tables(struct page** page_tables) {
+int detach_from_page_tables(page* page_tables) {
   int success = shmdt(page_tables);
   if (success == -1) {
-    perror("Failed to detach from page tables");
+    perror("FaileROCd to detach from page tables");
   }
   return success;
 }
+
+/**
+ * Get the page number for a particular
+ * memory address.
+ * 
+ * Returns -1 if the memory address
+ * exceeds the process' maximum memory bound.
+ * 
+ * @param  mem_addr Memory address
+ * @return          The page number the address belongs to
+ */
+int get_page_num(unsigned int mem_addr) {
+  if (mem_addr > PROC_MEM) {
+    return -1;  // Out of bounds
+  } else {
+    return mem_addr / PAGE_SIZE;
+  }
+}
+
+page* get_page(page* page_tables, int pid, int page_num) {
+  return page_tables + pid * NUM_FRAMES + page_num;
+} 
